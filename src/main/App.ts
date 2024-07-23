@@ -54,6 +54,7 @@ function createPopup() {
 export default class App {
 	private popup: BrowserWindow;
 	private tray: Tray;
+	private lastAlert: LibreCgmData | undefined;
 	constructor() {
 		this.popup = createPopup();
 
@@ -73,10 +74,11 @@ export default class App {
 		const y = Math.round(trayBounds.y + trayBounds.height);
 		return { x, y };
 	};
-	showWindow = () => {
+	showWindow = (size = "big") => {
 		if (this.popup.isVisible()) return;
 		const position = this.getWindowPosition();
 		this.popup.setPosition(position.x, position.y, false);
+		this.popup.setSize(360, size === "small" ? 160 : 640);
 		this.popup.show();
 		this.popup.setVisibleOnAllWorkspaces(true);
 		this.popup.focus();
@@ -87,18 +89,37 @@ export default class App {
 		if (this.popup.isVisible()) {
 			this.popup.hide();
 		} else {
-			this.showWindow();
+			this.showWindow("big");
 		}
 	};
 
 	listenToSugar = () => {
 		ipcMain.handle("libreData", (event, data) => {
 			const current = data.current as LibreCgmData;
-			if (data.current?.value) {
+			if (current?.value) {
 				this.tray.setTitle(
 					`${current.value.toFixed(1)} ${MAP_TREND_TO_ARROW[current.trend]}`,
 				);
+
+				if (this.lastAlert) {
+					if (
+						+current.date - +this.lastAlert.date < 60 * 60 * 1000 ||
+						Math.abs(current.value - this.lastAlert.value) > 2
+					) {
+						this.alert(current);
+					}
+				} else {
+					this.lastAlert = current;
+				}
 			}
 		});
 	};
+
+	alert(current) {
+		this.lastAlert = current;
+		this.showWindow("small");
+		setTimeout(() => {
+			this.popup.hide();
+		}, 1000);
+	}
 }
